@@ -19,8 +19,10 @@ export type CompanyDto = {
   description: string;
   sectors: Sector[];
   status: CompanyStatus;
-  /** Brand colour of the round logo. */
+  /** Brand colour behind the round logo. */
   color: string;
+  /** The company logo, drawn in the avatar and, big and faint, at the corner of the card. */
+  logo: string;
 };
 
 type CompanyRecord = Omit<CompanyDto, "description"> & { description: Record<CompanyLang, string> };
@@ -33,6 +35,7 @@ const doctolib = {
   },
   sectors: ["HEALTHCARE", "SOFTWARE", "ARTIFICIAL_INTELLIGENCE"],
   color: "#1379CD",
+  logo: "/D.png",
 } satisfies Omit<CompanyRecord, "id" | "status">;
 
 // Eight cards fill the background; the design shows the same company, in different states, on all of them.

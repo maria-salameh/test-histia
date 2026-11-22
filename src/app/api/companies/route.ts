@@ -7,6 +7,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json(
     { companies: getCompanies(isCompanyLang(lang) ? lang : "fr") },
-    { headers: { "Cache-Control": "public, max-age=300" } },
+    // Always revalidate: the payload is tiny, and a cached copy would hide a change of shape for minutes.
+    { headers: { "Cache-Control": "no-cache" } },
   );
 }

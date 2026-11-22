@@ -149,3 +149,57 @@
     0px 1px 5px 0px color-mix(in srgb, var(--c-dark) 20%, transparent),
     0px 6px 16px 0px color-mix(in srgb, var(--c-dark) 16%, transparent);
 }
+
+/* ---- Auth screens --------------------------------------------------------------------------------------------- */
+
+/*
+ * Figma "Background": two soft purple glows, one at the top and one (stronger) at the bottom, both centred,
+ * over the base colour. Drawn in CSS rather than as an image so it stays sharp and fills any screen.
+ */
+@utility auth-backdrop {
+  background-color: var(--app-background);
+  background-image:
+    radial-gradient(
+      ellipse 34% 30% at 50% 0%,
+      rgb(94 79 176 / 0.52) 0%,
+      rgb(94 79 176 / 0.36) 30%,
+      rgb(94 79 176 / 0.18) 55%,
+      rgb(94 79 176 / 0.06) 80%,
+      transparent 100%
+    ),
+    radial-gradient(
+      ellipse 44% 42% at 50% 100%,
+      rgb(94 79 176 / 0.64) 0%,
+      rgb(94 79 176 / 0.45) 30%,
+      rgb(94 79 176 / 0.23) 55%,
+      rgb(94 79 176 / 0.08) 80%,
+      transparent 100%
+    );
+}
+
+/*
+ * The logo stays at one spot while the card moves with its height. Its size and distance from the top follow the
+ * viewport height: 169px and 91px at 1080 (the design), 140px and 50px at 900, so on 1400x900 it never touches the card.
+ */
+@utility auth-logo {
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  height: auto;
+  width: clamp(6rem, calc(8.75rem + (100vh - 900px) * 0.161), 10.5625rem);
+  top: clamp(1rem, calc(3.125rem + (100vh - 900px) * 0.228), 5.6875rem);
+}
+
+/* Company cards fade in once loaded (they rest at 30% opacity, as designed). */
+@theme {
+  --animate-card-in: card-in 700ms ease-out both;
+
+  @keyframes card-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 0.3;
+    }
+  }
+}

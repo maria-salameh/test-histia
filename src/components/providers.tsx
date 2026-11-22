@@ -8,8 +8,10 @@ export function Providers({ children }: { children: ReactNode }) {
     () =>
       new QueryClient({
         defaultOptions: {
-          queries: { staleTime: 5 * 60_000, refetchOnWindowFocus: false, retry: false },
-          mutations: { retry: false },
+          // networkMode "always": never park a request because the browser thinks it is offline (that would leave
+          // a form spinning forever). The request is made, and a real failure shows up as the "network" error.
+          queries: { staleTime: 5 * 60_000, refetchOnWindowFocus: false, retry: false, networkMode: "always" },
+          mutations: { retry: false, networkMode: "always" },
         },
       }),
   );
