@@ -5,6 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useIntlayer, useLocale } from "next-intlayer";
+import { useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { LegalLinks } from "@/components/auth/legal-links";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,9 @@ export function LoginForm() {
   const validation = useIntlayer("validation");
   const errorText = useAuthErrorText();
   const retry = useRetryWindow();
+  // The spinner lasts until the next page is on screen. It is not tied to the mutation's "success" state: that
+  // state survives in the page Next keeps alive, and would leave the button busy on the way back.
+  const [isNavigating, startNavigation] = useTransition();
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -46,12 +50,15 @@ export function LoginForm() {
     mutationFn: ({ email, password }: LoginValues) => authApi.signIn(email, password),
     onSuccess: (result) => {
       const { twoFactorRedirect, twoFactorMethods } = result as SignInResult;
+      // Next keeps the page we leave alive in the background: empty the form now, or coming back after a
+      // sign-out would show the previous password.
+      form.reset();
       if (twoFactorRedirect) {
         // The account has a second step: remember which ones (the server only says it now) and go verify.
         saveMfaAttempt(toMethods(twoFactorMethods));
-        router.push(`/${locale}/verify`);
+        startNavigation(() => router.push(`/${locale}/verify`));
       } else {
-        router.replace(`/${locale}/account`);
+        startNavigation(() => router.replace(`/${locale}/account`));
       }
     },
     onError: (error) => {
@@ -97,7 +104,7 @@ export function LoginForm() {
         size="lg"
         alignment="center"
         textSize="base"
-        isLoading={signIn.isPending || signIn.isSuccess}
+        isLoading={signIn.isPending || isNavigating}
         disabled={retry.seconds > 0}
         className="mt-6 h-[3.125rem] w-full hover:bg-primary-300"
       >

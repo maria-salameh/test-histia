@@ -44,7 +44,10 @@ export function VerifyCard() {
   const finished = useRef(false);
 
   useEffect(() => {
-    if (attempt === null && !finished.current) router.replace(`/${locale}/login`);
+    // `finished` only covers the moment between a successful check and leaving the page; Next keeps this page
+    // alive afterwards, so a later visit must start from scratch.
+    if (attempt) finished.current = false;
+    else if (!finished.current) router.replace(`/${locale}/login`);
   }, [attempt, locale, router]);
 
   if (!attempt) {
@@ -195,7 +198,10 @@ function VerifyScreen({ attempt, onFinished }: { attempt: MfaAttempt; onFinished
             <OtpInput
               ref={otp}
               value={digits}
-              onChange={setDigits}
+              onChange={(next) => {
+                if (verifyCode.isError) verifyCode.reset(); // typing again clears the previous refusal
+                setDigits(next);
+              }}
               onComplete={(code) => verifyCode.mutate(code)}
               groupLabel={`${verify.codeGroupLabel}`}
               cellLabel={(position) => `${verify.digit} ${position} / ${digits.length}`}
@@ -216,7 +222,10 @@ function VerifyScreen({ attempt, onFinished }: { attempt: MfaAttempt; onFinished
                   type="button"
                   className={LINK_CLASS}
                   disabled={cooldown > 0 || sendEmailCode.isPending}
-                  onClick={() => sendEmailCode.mutate()}
+                  onClick={() => {
+                    verifyCode.reset(); // a new code starts a clean attempt
+                    sendEmailCode.mutate();
+                  }}
                 >
                   {emailLinkLabel}
                   {cooldown > 0 && <span className="text-white"> ({cooldown}s)</span>}

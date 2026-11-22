@@ -4,6 +4,8 @@ import { AuthError, toAuthError } from "@/lib/auth-errors";
 type ApiResult<T> = { data: T | null; error: { status?: number; code?: string } | null };
 type FetchOptions = { onError: (context: { response: Response }) => void };
 
+const REQUEST_TIMEOUT_MS = 20_000;
+
 /**
  * Runs one Better Auth client call and turns every failure into an `AuthError`:
  * API errors (with the `X-Retry-After` header kept on a 429) and network failures alike.
@@ -11,15 +13,25 @@ type FetchOptions = { onError: (context: { response: Response }) => void };
 async function run<T>(call: (fetchOptions: FetchOptions) => Promise<ApiResult<T>>): Promise<T> {
   const headers = { retryAfter: null as string | null };
   let result: ApiResult<T>;
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
   try {
-    result = await call({
-      onError: ({ response }) => {
-        headers.retryAfter = response.headers.get("X-Retry-After");
-      },
+    // A form must never spin forever: if the server stays silent, it ends as the "network" error.
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error("timeout")), REQUEST_TIMEOUT_MS);
     });
+    result = await Promise.race([
+      call({
+        onError: ({ response }) => {
+          headers.retryAfter = response.headers.get("X-Retry-After");
+        },
+      }),
+      timeout,
+    ]);
   } catch {
     throw new AuthError("network");
+  } finally {
+    clearTimeout(timer);
   }
 
   if (result.error || result.data === null) throw toAuthError(result.error, headers.retryAfter);

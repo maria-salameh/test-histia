@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useIntlayer, useLocale } from "next-intlayer";
+import { useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { LegalLinks } from "@/components/auth/legal-links";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,8 @@ export function SignupForm() {
   const validation = useIntlayer("validation");
   const errorText = useAuthErrorText();
   const retry = useRetryWindow();
+  // Busy until the next page is on screen (not tied to the mutation's "success", which Next would keep alive).
+  const [isNavigating, startNavigation] = useTransition();
 
   const form = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
@@ -34,8 +37,11 @@ export function SignupForm() {
 
   const signUp = useMutation({
     mutationFn: ({ email, password }: SignupValues) => authApi.signUp(email, password),
-    // Signing up signs the user in.
-    onSuccess: () => router.replace(`/${locale}/account`),
+    // Signing up signs the user in. The form is emptied first: Next keeps this page alive in the background.
+    onSuccess: () => {
+      form.reset();
+      startNavigation(() => router.replace(`/${locale}/account`));
+    },
     onError: (error) => {
       if (error instanceof AuthError && error.key === "tooManyRequests" && error.retryAfter) {
         retry.start(error.retryAfter);
@@ -85,7 +91,7 @@ export function SignupForm() {
         size="lg"
         alignment="center"
         textSize="base"
-        isLoading={signUp.isPending || signUp.isSuccess}
+        isLoading={signUp.isPending || isNavigating}
         disabled={retry.seconds > 0}
         className="mt-6 h-[3.125rem] w-full hover:bg-primary-300"
       >
