@@ -7,11 +7,12 @@ import { useCountdown } from "@/lib/use-countdown";
 
 /**
  * Counts down the delay a 429 asked for (its `X-Retry-After` header), so a form can say how long to wait
- * and stay disabled until then.
+ * and stay disabled until then. Used by the forms that have no stored deadline of their own.
  */
 export function useRetryWindow() {
   const [until, setUntil] = useState<number | null>(null);
   const seconds = useCountdown(until);
+  // `start` is called from a mutation's onError, an event context: reading the clock there is fine.
   return { seconds, start: (delaySeconds: number) => setUntil(Date.now() + delaySeconds * 1000) };
 }
 
@@ -22,11 +23,14 @@ export function useRetryWindow() {
 export function useAuthErrorText() {
   const errors = useIntlayer("errors");
 
+  // Returns a function (not a string) because every form calls it with its own error and its own countdown.
   return (error: unknown, waitSeconds = 0): string | null => {
     const key = error instanceof AuthError ? error.key : "generic";
     if (key === "tooManyRequests" && error instanceof AuthError && error.retryAfter) {
+      // null once the delay is over: the message is no longer true, so it vanishes with the disabled button.
       return waitSeconds > 0 ? `${errors.tooManyRequestsIn} ${waitSeconds} ${errors.seconds}.` : null;
     }
+    // `${…}` turns the translated Intlayer node into a plain string.
     return `${errors[key]}`;
   };
 }

@@ -9,6 +9,8 @@ export const generateMetadata = async ({ params }: LocalPromiseParams): Promise<
   return { title: getIntlayer("verify", locale).metaTitle };
 };
 
+// Server shell + the client VerifyCard: the card reads localStorage (which methods the account has), so it
+// cannot be rendered on the server.
 export default function VerifyPage() {
   return (
     <AuthShell>

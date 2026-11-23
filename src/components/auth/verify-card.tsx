@@ -27,6 +27,7 @@ import { type RecoveryCodeValues, recoveryCodeSchema, type ValidationKey } from 
 import { useAuthErrorText, useRetryWindow } from "@/lib/use-auth-error";
 import { useCountdown } from "@/lib/use-countdown";
 
+// The small lavender links under the code cells; they dim when disabled (e.g. during the resend delay).
 const LINK_CLASS =
   "cursor-pointer text-xs-plus font-medium text-[#C1B9EA] transition-colors hover:text-white focus-visible:text-white disabled:cursor-not-allowed disabled:text-[#C1B9EA]/50 disabled:hover:text-[#C1B9EA]/50 motion-reduce:transition-none";
 
@@ -35,6 +36,11 @@ type Mode = "code" | "recovery";
 /**
  * Second step of the sign-in. It only exists while a sign-in is waiting for it: the login screen records which
  * methods the account has, and a reload of this page finds them again. Without one, it sends you back to the login.
+ *
+ * Three states, decided by `useMfaAttempt()`:
+ *   undefined  not read yet (server render, hydration)  → an empty frame, never a wrong screen
+ *   null       no sign-in waiting (or it expired)       → back to the login page
+ *   object     { methods, startedAt, emailSentAt }      → the real screen
  */
 export function VerifyCard() {
   const attempt = useMfaAttempt();
@@ -63,6 +69,7 @@ export function VerifyCard() {
     <VerifyScreen
       attempt={attempt}
       onFinished={() => {
+        // Set before clearing, so the effect above doesn't treat the cleared attempt as "send me back to login".
         finished.current = true;
         clearMfaAttempt();
       }}
@@ -70,13 +77,20 @@ export function VerifyCard() {
   );
 }
 
+/**
+ * The screen itself. What it shows depends on the account's methods:
+ *   app only       six cells + "use a recovery code"
+ *   app + email    the same + a link to send an email code
+ *   email only     the code is sent on arrival, the link only offers to resend it
+ * plus the recovery-code form, reachable from all of them.
+ */
 function VerifyScreen({ attempt, onFinished }: { attempt: MfaAttempt; onFinished: () => void }) {
   const { locale } = useLocale();
   const router = useRouter();
   const verify = useIntlayer("verify");
   const common = useIntlayer("common");
   const errorText = useAuthErrorText();
-  const retry = useRetryWindow();
+  const retry = useRetryWindow(); // delay after a 429 on a verification attempt
   const titleId = useId();
   const errorId = useId();
 
@@ -84,10 +98,11 @@ function VerifyScreen({ attempt, onFinished }: { attempt: MfaAttempt; onFinished
   const hasEmail = attempt.methods.includes("otp");
 
   const [mode, setMode] = useState<Mode>("code");
-  const [digits, setDigits] = useState(emptyOtp);
-  const [expired, setExpired] = useState(false);
+  const [digits, setDigits] = useState(emptyOtp); // the six cells ("" or one digit each)
+  const [expired, setExpired] = useState(false); // the server dropped the sign-in attempt (10 minutes)
   const otp = useRef<OtpInputHandle>(null);
 
+  // Seconds left before another email code may be requested (a stored deadline, so right after a reload too).
   const cooldown = useCountdown(useCooldownUntil("otp"));
 
   const finish = () => {
@@ -95,6 +110,7 @@ function VerifyScreen({ attempt, onFinished }: { attempt: MfaAttempt; onFinished
     router.replace(`/${locale}/account`);
   };
 
+  // Two failures need more than a message: the attempt expired (offer a way back) and a rate limit (disable).
   const noteFailure = (error: unknown) => {
     if (!(error instanceof AuthError)) return;
     if (error.key === "attemptExpired") setExpired(true);
@@ -118,7 +134,7 @@ function VerifyScreen({ attempt, onFinished }: { attempt: MfaAttempt; onFinished
     },
     onSuccess: finish,
     onError: (error) => {
-      setDigits(emptyOtp());
+      setDigits(emptyOtp()); // a refused code is never worth keeping: start over
       noteFailure(error);
     },
   });
@@ -128,7 +144,7 @@ function VerifyScreen({ attempt, onFinished }: { attempt: MfaAttempt; onFinished
     mutationFn: () => authApi.sendOtp(),
     onSuccess: () => {
       markEmailCodeSent();
-      startCooldown("otp");
+      startCooldown("otp"); // blocks the link for 30 s, and survives a reload
     },
     onError: (error) => {
       if (error instanceof AuthError && error.key === "tooManyRequests") {
@@ -140,8 +156,10 @@ function VerifyScreen({ attempt, onFinished }: { attempt: MfaAttempt; onFinished
   });
 
   // With the email as only method, the code is sent as soon as the screen opens (unless one just left).
+  // The ref makes the effect run its body once: React runs effects twice in development, and a second call
+  // would hit the 30 s rate limit. The stored deadline covers the other case, a reload within the delay.
   const autoSent = useRef(false);
-  const { mutate: sendCode } = sendEmailCode;
+  const { mutate: sendCode } = sendEmailCode; // `mutate` is stable; the whole mutation object is not
   useEffect(() => {
     if (autoSent.current || hasApp || !hasEmail) return;
     autoSent.current = true;
@@ -149,11 +167,12 @@ function VerifyScreen({ attempt, onFinished }: { attempt: MfaAttempt; onFinished
     sendCode();
   }, [hasApp, hasEmail, sendCode]);
 
+  // Focus management: the first cell when the code form is shown…
   useEffect(() => {
     if (mode === "code") otp.current?.focus();
   }, [mode]);
 
-  // After a refused code the cells are empty again: back to the first one.
+  // …and again after a refused code (the cells were emptied).
   const refused = verifyCode.isError;
   useEffect(() => {
     if (refused) otp.current?.focus();
@@ -170,6 +189,7 @@ function VerifyScreen({ attempt, onFinished }: { attempt: MfaAttempt; onFinished
     router.replace(`/${locale}/login`);
   };
 
+  // A 429 on "send" is handled silently above (it just starts the countdown); anything else is shown.
   const emailSendFailed =
     sendEmailCode.isError && !(sendEmailCode.error instanceof AuthError && sendEmailCode.error.key === "tooManyRequests");
   const failure = verifyCode.isError
@@ -178,7 +198,9 @@ function VerifyScreen({ attempt, onFinished }: { attempt: MfaAttempt; onFinished
       ? errorText(sendEmailCode.error)
       : null;
 
+  // "Send a code by email" until a code has left (always "Resend" when email is the only method).
   const emailLinkLabel = !hasApp || attempt.emailSentAt !== undefined ? verify.resend : verify.sendByEmail;
+  // One explanation per combination of methods, as in the design.
   const help =
     mode === "recovery"
       ? verify.helpRecovery
@@ -202,7 +224,7 @@ function VerifyScreen({ attempt, onFinished }: { attempt: MfaAttempt; onFinished
                 if (verifyCode.isError) verifyCode.reset(); // typing again clears the previous refusal
                 setDigits(next);
               }}
-              onComplete={(code) => verifyCode.mutate(code)}
+              onComplete={(code) => verifyCode.mutate(code)} // the sixth digit submits
               groupLabel={`${verify.codeGroupLabel}`}
               cellLabel={(position) => `${verify.digit} ${position} / ${digits.length}`}
               busy={verifyCode.isPending || retry.seconds > 0}
@@ -240,6 +262,7 @@ function VerifyScreen({ attempt, onFinished }: { attempt: MfaAttempt; onFinished
           <RecoveryForm onSuccess={finish} onFailure={noteFailure} onUseCode={() => switchMode("code")} />
         )}
 
+        {/* Shown only when the server dropped the sign-in attempt: nothing here can work any more. */}
         {expired && (
           <button type="button" className={LINK_CLASS} onClick={goBackToLogin}>
             {common.backToLogin}
@@ -257,6 +280,7 @@ function VerifyScreen({ attempt, onFinished }: { attempt: MfaAttempt; onFinished
   );
 }
 
+/** The recovery-code alternative: one text field, one single-use code (the server invalidates it once used). */
 function RecoveryForm({
   onSuccess,
   onFailure,
@@ -284,7 +308,7 @@ function RecoveryForm({
       if (error instanceof AuthError && error.key === "tooManyRequests" && error.retryAfter) {
         retry.start(error.retryAfter);
       }
-      onFailure(error);
+      onFailure(error); // lets the parent show "attempt expired" if that is what happened
     },
   });
   const failure = verifyBackupCode.isError ? errorText(verifyBackupCode.error, retry.seconds) : null;
@@ -296,6 +320,7 @@ function RecoveryForm({
         onSubmit={form.handleSubmit((values) => verifyBackupCode.mutate(values))}
         className={`${AUTH_FORM_WIDTH} flex flex-col`}
       >
+        {/* No autocomplete, no capitalisation, no spell-check: a recovery code is not a word. */}
         <TextField
           label={verify.recoveryLabel}
           autoComplete="off"
@@ -312,6 +337,7 @@ function RecoveryForm({
           size="lg"
           alignment="center"
           textSize="base"
+          // Safe to key on isSuccess here: on success the parent clears the attempt and this form unmounts.
           isLoading={verifyBackupCode.isPending || verifyBackupCode.isSuccess}
           disabled={retry.seconds > 0}
           className="mt-8 h-[3.125rem] w-full hover:bg-primary-300"

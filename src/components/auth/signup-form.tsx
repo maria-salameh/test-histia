@@ -16,6 +16,10 @@ import { AuthError } from "@/lib/auth-errors";
 import { type SignupValues, signupSchema, type ValidationKey } from "@/lib/schemas";
 import { useAuthErrorText, useRetryWindow } from "@/lib/use-auth-error";
 
+/**
+ * The "Inscription" tab. Same shape as LoginForm. The design has no name field, so authApi.signUp derives the
+ * display name from the address. Better Auth signs the new user in, so success goes straight to /account.
+ */
 export function SignupForm() {
   const { locale } = useLocale();
   const router = useRouter();
@@ -27,6 +31,7 @@ export function SignupForm() {
   // Busy until the next page is on screen (not tied to the mutation's "success", which Next would keep alive).
   const [isNavigating, startNavigation] = useTransition();
 
+  // The confirmation field is checked by the schema (a refine on the whole object), not by the server.
   const form = useForm<SignupValues>({
     resolver: zodResolver(signupSchema),
     defaultValues: { email: "", password: "", confirmPassword: "" },
@@ -52,6 +57,7 @@ export function SignupForm() {
   // An address that is already taken belongs to the email field; everything else is about the whole form.
   const emailTaken = signUp.error instanceof AuthError && signUp.error.key === "userExists";
   const failure = signUp.isError && !emailTaken ? errorText(signUp.error, retry.seconds) : null;
+  // Zod's message (format, empty) wins; otherwise the server's "already exists" answer.
   const emailError = fieldError(errors.email?.message) ?? (emailTaken ? errorText(signUp.error) ?? undefined : undefined);
 
   return (
@@ -67,6 +73,7 @@ export function SignupForm() {
           errorMessage={emailError}
           {...form.register("email")}
         />
+        {/* new-password tells password managers to offer a generated password, not to fill an existing one. */}
         <PasswordInput
           label={common.password}
           autoComplete="new-password"

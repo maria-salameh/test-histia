@@ -25,15 +25,20 @@ export default function EmailPage() {
 /**
  * No mail is really sent: the app stores the latest reset link (it is also listed on /code). This page shows the
  * email that link would be sent in. Until someone asks for a link, it shows the design with a sample link.
+ *
+ * DEVELOPMENT ONLY, like /code: it shows the latest reset link of ANY account to any visitor. In production the
+ * email goes through a mail provider and this route should disappear (or sit behind a development flag).
  */
 async function LatestResetEmail() {
+  // Reading the database at request time: `connection()` tells Next this part cannot be prerendered, and it
+  // sits inside <Suspense> as Cache Components requires.
   await connection();
   // `locale` is a root parameter of the localized layout only, so its type allows "none" (as on /code).
   const locale = (await rootLocale()) ?? "fr";
 
   const mail = await prisma.devMail.findFirst({
     where: { kind: "PASSWORD_RESET" },
-    orderBy: { createdAt: "desc" },
+    orderBy: { createdAt: "desc" }, // the index on (to, kind, createdAt) serves this query
   });
   const baseUrl = process.env.BETTER_AUTH_URL ?? "http://localhost:3000";
   const url = mail?.content ?? `${baseUrl}/${locale}/reset-password?token=preview`;

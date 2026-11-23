@@ -15,7 +15,8 @@ type Mode = "login" | "signup";
  */
 export function LoginCard() {
   const auth = useIntlayer("auth");
-  const idBase = useId();
+  const idBase = useId(); // prefix for the ids that tie each tab to its panel (aria-controls / aria-labelledby)
+  // Plain component state, not the URL: the brief wants the tabs to switch "without reloading the page".
   const [mode, setMode] = useState<Mode>("login");
   const isLogin = mode === "login";
 
@@ -26,6 +27,7 @@ export function LoginCard() {
 
   return (
     <AuthCard aria-labelledby={`${idBase}-title`}>
+      {/* The title and subtitle follow the active tab. */}
       <AuthCardHeader
         titleId={`${idBase}-title`}
         title={`${isLogin ? auth.loginTitle : auth.signupTitle}`}
@@ -37,6 +39,7 @@ export function LoginCard() {
           <AuthTabs tabs={tabs} value={mode} onChange={setMode} label={`${auth.tabsLabel}`} idBase={idBase} />
         </div>
 
+        {/* Two panels, both mounted: `hidden` only toggles display, so what was typed survives a tab switch. */}
         <div
           role="tabpanel"
           id={panelId(idBase, "login")}

@@ -9,6 +9,7 @@ export const generateMetadata = async ({ params }: LocalPromiseParams): Promise<
   return { title: getIntlayer("forgot-password", locale).metaTitle };
 };
 
+// A route of its own (not a state of the form) so that "check your inbox" and its resend countdown survive a reload.
 export default function ForgotPasswordSentPage() {
   return (
     <AuthShell>

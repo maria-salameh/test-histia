@@ -27,6 +27,10 @@ const toMethods = (methods: readonly string[] | undefined): MfaMethod[] => {
   return known.length > 0 ? known : ["totp"];
 };
 
+/**
+ * The "Connexion" tab. Flow: validate (React Hook Form + Zod) → `authApi.signIn` through a TanStack mutation →
+ * either straight to /account, or to /verify when the account has a second step.
+ */
 export function LoginForm() {
   const { locale } = useLocale();
   const router = useRouter();
@@ -34,16 +38,18 @@ export function LoginForm() {
   const common = useIntlayer("common");
   const validation = useIntlayer("validation");
   const errorText = useAuthErrorText();
-  const retry = useRetryWindow();
+  const retry = useRetryWindow(); // the sign-in rate limit: 3 attempts per 10 s, then a 429
   // The spinner lasts until the next page is on screen. It is not tied to the mutation's "success" state: that
   // state survives in the page Next keeps alive, and would leave the button busy on the way back.
   const [isNavigating, startNavigation] = useTransition();
 
+  // Uncontrolled inputs (via `register`): typing does not re-render the form. Zod validates on submit, then on change.
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
   const { errors } = form.formState;
+  // Zod errors are keys (see schemas.ts): look the sentence up in the current language.
   const fieldError = (key?: string) => (key ? `${validation[key as ValidationKey]}` : undefined);
 
   const signIn = useMutation({
@@ -58,19 +64,23 @@ export function LoginForm() {
         saveMfaAttempt(toMethods(twoFactorMethods));
         startNavigation(() => router.push(`/${locale}/verify`));
       } else {
+        // replace, not push: the login page should not stay in the history behind the connected page.
         startNavigation(() => router.replace(`/${locale}/account`));
       }
     },
     onError: (error) => {
+      // A 429 comes with the number of seconds to wait: start the countdown that disables the button.
       if (error instanceof AuthError && error.key === "tooManyRequests" && error.retryAfter) {
         retry.start(error.retryAfter);
       }
     },
   });
 
+  // null when there is nothing to say (including once a rate-limit delay is over).
   const failure = signIn.isError ? errorText(signIn.error, retry.seconds) : null;
 
   return (
+    // noValidate: the browser's own bubbles are off, Zod produces the (translated) messages.
     <form noValidate onSubmit={form.handleSubmit((values) => signIn.mutate(values))} className="flex flex-col">
       <div className="flex flex-col gap-4">
         <TextField
@@ -96,6 +106,7 @@ export function LoginForm() {
         <Link href={`/${locale}/forgot-password`}>{auth.forgotPassword}</Link>
       </Button>
 
+      {/* Refused sign-in, rate limit, network failure: one alert for the whole form. */}
       {failure && <FormAlert className="mt-5">{failure}</FormAlert>}
 
       <Button

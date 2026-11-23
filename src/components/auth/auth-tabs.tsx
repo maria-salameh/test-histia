@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 
 type Tab<T extends string> = { id: T; label: string };
 
+// Generic over the tab ids: `onChange` receives exactly "login" | "signup" here, not any string.
 type AuthTabsProps<T extends string> = {
   tabs: readonly Tab<T>[];
   value: T;
@@ -17,12 +18,16 @@ type AuthTabsProps<T extends string> = {
 export const tabId = (base: string, id: string) => `${base}-tab-${id}`;
 export const panelId = (base: string, id: string) => `${base}-panel-${id}`;
 
-/** Connexion / Inscription: switches the card's content without leaving the page. */
+/**
+ * Connexion / Inscription: switches the card's content without leaving the page.
+ * Follows the WAI-ARIA "tabs" pattern: role="tablist" / "tab" / "tabpanel" (the panels are in LoginCard), a
+ * "roving" tab stop (only the selected tab can be reached with Tab) and arrow keys to move between tabs.
+ */
 export function AuthTabs<T extends string>({ tabs, value, onChange, label, idBase }: AuthTabsProps<T>) {
-  const buttons = useRef<Record<string, HTMLButtonElement | null>>({});
+  const buttons = useRef<Record<string, HTMLButtonElement | null>>({}); // to move the focus with the arrows
 
   const select = (index: number) => {
-    const next = tabs[(index + tabs.length) % tabs.length];
+    const next = tabs[(index + tabs.length) % tabs.length]; // wraps: the right arrow on the last tab goes to the first
     onChange(next.id);
     buttons.current[next.id]?.focus();
   };
@@ -32,8 +37,8 @@ export function AuthTabs<T extends string>({ tabs, value, onChange, label, idBas
     else if (event.key === "ArrowLeft") select(index - 1);
     else if (event.key === "Home") select(0);
     else if (event.key === "End") select(tabs.length - 1);
-    else return;
-    event.preventDefault();
+    else return; // any other key keeps its default behaviour
+    event.preventDefault(); // we handled it: no page scroll
   };
 
   return (
@@ -51,6 +56,7 @@ export function AuthTabs<T extends string>({ tabs, value, onChange, label, idBas
             id={tabId(idBase, tab.id)}
             aria-selected={selected}
             aria-controls={panelId(idBase, tab.id)}
+            // Roving tabindex: one tab stop for the whole tablist, arrows do the rest.
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(tab.id)}
             onKeyDown={(event) => handleKeyDown(event, index)}
@@ -60,6 +66,7 @@ export function AuthTabs<T extends string>({ tabs, value, onChange, label, idBas
             )}
           >
             {tab.label}
+            {/* The purple underline of the active tab; it sits over the grey line of the tablist (-mb-px). */}
             <span
               aria-hidden
               className={cn(

@@ -10,13 +10,14 @@ import { useCallback, useSyncExternalStore } from "react";
  * idle time shows the right number on its very first render.
  */
 export function useCountdown(until: number | null | undefined): number {
+  // The "subscribe" half of useSyncExternalStore: here the external event is simply the passing of time.
   const subscribe = useCallback(
     (notify: () => void) => {
-      if (!until) return () => {};
+      if (!until) return () => {}; // no deadline: nothing to tick for
       const id = window.setInterval(() => {
-        notify();
-        if (Date.now() >= until) window.clearInterval(id);
-      }, 250);
+        notify(); // ask React to re-read the value (it only re-renders if the number changed)
+        if (Date.now() >= until) window.clearInterval(id); // finished: stop ticking
+      }, 250); // four checks a second keeps the displayed second from lagging
       return () => window.clearInterval(id);
     },
     [until],
@@ -24,7 +25,8 @@ export function useCountdown(until: number | null | undefined): number {
 
   return useSyncExternalStore(
     subscribe,
+    // ceil: shows 30 first and reaches 0 only when the deadline has really passed.
     () => (until ? Math.max(0, Math.ceil((until - Date.now()) / 1000)) : 0),
-    () => 0,
+    () => 0, // server snapshot: no countdown while rendering on the server
   );
 }

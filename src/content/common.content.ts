@@ -1,5 +1,8 @@
 import { type Dictionary, t } from "intlayer";
 
+// An Intlayer dictionary. `key` is what components pass to useIntlayer("common"); each text is t({ fr, en }).
+// The keys are typed, so a typo or a missing translation is a compile-time error. Same pattern in every
+// *.content.ts file next to this one.
 const commonContent = {
   key: "common",
   content: {

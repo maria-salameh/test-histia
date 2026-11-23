@@ -11,6 +11,7 @@ import {
 import { OTP_LENGTH } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 
+/** What a parent can ask the input to do: put the focus back on the first cell. */
 export type OtpInputHandle = { focus: () => void };
 
 type OtpInputProps = {
@@ -32,17 +33,20 @@ export const emptyOtp = () => Array.from({ length: OTP_LENGTH }, () => "");
 /**
  * Six cells for a six-digit code. Typing moves on to the next cell, backspace goes back, and a pasted code
  * is spread over the cells whichever one has the focus (a full code always starts from the first cell).
+ *
+ * It is a controlled component (the parent owns the digits) because the cells depend on each other. It is six
+ * real <input>s rather than one, to match the design; the cost is handling focus, paste and autofill by hand.
  */
 export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(function OtpInput(
   { value, onChange, onComplete, groupLabel, cellLabel, busy, invalid, describedBy },
   handle,
 ) {
-  const cells = useRef<(HTMLInputElement | null)[]>([]);
+  const cells = useRef<(HTMLInputElement | null)[]>([]); // the six DOM inputs, for moving the focus
 
   const focusCell = (index: number) => {
-    const cell = cells.current[Math.min(Math.max(index, 0), OTP_LENGTH - 1)];
+    const cell = cells.current[Math.min(Math.max(index, 0), OTP_LENGTH - 1)]; // clamp to 0…5
     cell?.focus();
-    cell?.select();
+    cell?.select(); // so typing replaces the digit instead of appending
   };
 
   useImperativeHandle(handle, () => ({ focus: () => focusCell(0) }));
@@ -52,19 +56,21 @@ export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(function OtpIn
     const next = [...value];
     let index = start;
     for (const digit of digits) {
-      if (index >= OTP_LENGTH) break;
+      if (index >= OTP_LENGTH) break; // extra digits are ignored
       next[index] = digit;
       index += 1;
     }
     onChange(next);
-    if (next.every(Boolean)) onComplete(next.join(""));
-    else focusCell(index);
+    if (next.every(Boolean)) onComplete(next.join("")); // all six cells hold a digit
+    else focusCell(index); // otherwise go to the first empty one
   };
 
+  // `onChange` covers typing, deleting, and the phone's autofill (which drops the whole code into one cell).
   const handleChange = (index: number, event: ChangeEvent<HTMLInputElement>) => {
-    const digits = event.target.value.replace(/\D/g, "");
+    const digits = event.target.value.replace(/\D/g, ""); // digits only
 
     if (!digits) {
+      // The cell was emptied (Delete, or a selection removed).
       const next = [...value];
       next[index] = "";
       onChange(next);
@@ -80,6 +86,7 @@ export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(function OtpIn
   const handleKeyDown = (index: number, event: KeyboardEvent<HTMLInputElement>) => {
     switch (event.key) {
       case "Backspace":
+        // On an empty cell, Backspace deletes the previous digit and steps back (a filled cell is handled by onChange).
         if (!value[index] && index > 0) {
           event.preventDefault();
           const next = [...value];
@@ -107,6 +114,8 @@ export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(function OtpIn
     }
   };
 
+  // Paste is intercepted so the browser doesn't dump six digits into one cell. A complete code always fills the
+  // cells from the first one, whichever cell had the focus; a shorter one fills from the cell that was clicked.
   const handlePaste = (index: number, event: ClipboardEvent<HTMLInputElement>) => {
     event.preventDefault();
     const digits = event.clipboardData.getData("text").replace(/\D/g, "");
@@ -116,6 +125,7 @@ export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(function OtpIn
   };
 
   return (
+    // role="group" + aria-label: a screen reader announces "Six-digit verification code" once, then "Digit 1 / 6"…
     <div role="group" aria-label={groupLabel} aria-busy={busy || undefined} className="flex justify-center gap-3">
       {value.map((digit, index) => (
         <input
@@ -124,12 +134,14 @@ export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(function OtpIn
           ref={(element) => {
             cells.current[index] = element;
           }}
-          type="text"
-          inputMode="numeric"
+          type="text" // not type="number": no spinners, keeps a leading zero
+          inputMode="numeric" // numeric keypad on phones
           pattern="[0-9]*"
+          // Only the first cell offers the one-time-code autofill (SMS / password manager); it then fills all six.
           autoComplete={index === 0 ? "one-time-code" : "off"}
           placeholder="0"
           value={digit}
+          // readOnly rather than disabled while checking: a disabled input would drop the focus.
           readOnly={busy}
           aria-label={cellLabel(index + 1)}
           aria-invalid={invalid || undefined}
@@ -138,6 +150,7 @@ export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(function OtpIn
           onKeyDown={(event) => handleKeyDown(index, event)}
           onPaste={(event) => handlePaste(index, event)}
           onFocus={(event) => event.currentTarget.select()}
+          // No maxLength on purpose: it would truncate the autofilled six-digit code to one character.
           className={cn(
             // Figma "OTP_Cell": 52x80, 1px white border, 4px radius, Inter 600 32/39, placeholder at 20%.
             "h-20 min-w-0 max-w-[52px] flex-1 rounded-[4px] border border-white bg-transparent text-center text-[32px] leading-[39px] font-semibold text-white outline-none transition-[border-color,box-shadow,opacity] duration-200 placeholder:text-white/20 focus:border-primary focus:shadow-[0_0_0_1px_var(--color-primary)] motion-reduce:transition-none",

@@ -9,6 +9,7 @@ export const generateMetadata = async ({ params }: LocalPromiseParams): Promise<
   return { title: getIntlayer("auth", locale).metaTitle };
 };
 
+// A Server Component: the shell (background, logo, fleet cards) around the one client component that holds the forms.
 export default function LoginPage() {
   return (
     <AuthShell>

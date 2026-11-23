@@ -14,6 +14,7 @@ export const generateMetadata = async ({ params }: LocalPromiseParams): Promise<
   return { title: getIntlayer("account", locale).metaTitle };
 };
 
+// The page shell (background, logo, an empty card) is prerendered; only <Account /> waits for the request.
 export default function AccountPage() {
   return (
     <AuthShell>
@@ -28,12 +29,15 @@ export default function AccountPage() {
 /**
  * The only page behind the login. proxy.ts already sends visitors without a session cookie away;
  * this is the real check: a cookie that no longer matches a session gets the same treatment.
+ * It is an async Server Component, so it reads the session directly (no API call from the browser) and ships
+ * no JavaScript of its own; only the sign-out button is a client component.
  */
 async function Account() {
   const locale = await rootLocale();
   const session = await getSession();
-  if (!session) redirect(`/${locale}/login`);
+  if (!session) redirect(`/${locale}/login`); // throws: nothing below runs for a visitor without a session
 
+  // getIntlayer, not useIntlayer: hooks are not allowed in an async component.
   const content = getIntlayer("account", locale);
 
   return (
@@ -45,6 +49,7 @@ async function Account() {
           </svg>
         </span>
         <AuthCardHeader titleId="account-title" title={content.title} description={content.description} />
+        {/* The brief only needs a page that clearly shows who is connected. */}
         <p className="rounded-sm bg-black/20 px-4 py-3 text-sx text-white">
           {content.signedInAs} <strong className="font-semibold">{session.user.email}</strong>
         </p>

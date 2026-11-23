@@ -8,6 +8,7 @@ import { SectorTag } from "@/components/sectors/sector-tag";
 import type { CompanyDto } from "@/lib/companies";
 import { cn } from "@/lib/utils";
 
+// The design has two badges; the server's four statuses map onto them (or onto none).
 type Badge = "closed" | "sold";
 
 // CLOSED and INACTIVE show the "closed" badge, ACQUIRED the "sold" one, ACTIVE nothing.
@@ -47,11 +48,14 @@ type CompanyCardProps = {
  * with the company logo bleeding out of the top-left corner (clipped by the card's rounded edge).
  */
 export function CompanyCard({ company, className, style }: CompanyCardProps) {
+  // The server sends identifiers (HEALTHCARE, CLOSED…); the labels are translated here, in the current language.
   const sectors = useIntlayer("sectors");
   const statuses = useIntlayer("company-status");
   const badge = badgeOf(company.status);
 
   return (
+    // opacity-30 dims the WHOLE card (text included), as in the design; the dark fill and the soft white glow
+    // are the design's `rgba(0,0,0,.3)` and `0 0 30px 2px rgba(255,255,255,.15)`. overflow-hidden clips the big logo.
     <article
       style={style}
       className={cn(
@@ -78,10 +82,13 @@ export function CompanyCard({ company, className, style }: CompanyCardProps) {
         />
       </div>
 
+      {/* Content, mirroring the Figma auto-layout: 18px padding, rows 19px apart; inside the first row, the
+          title line and the description are 15px apart. */}
       <div className="relative flex h-full flex-col items-start gap-[19px] p-[18px]">
         <div className="flex w-full flex-col gap-[15px]">
           <div className="flex w-full items-start justify-between gap-3">
             <div className="flex items-center gap-3">
+              {/* Round avatar: the brand colour with the logo inset by 3.96px (30.08px inside 38px). */}
               <span
                 aria-hidden
                 className="relative block size-[38px] shrink-0 rounded-full"
@@ -106,6 +113,7 @@ export function CompanyCard({ company, className, style }: CompanyCardProps) {
               </span>
             )}
           </div>
+          {/* Two lines of 18px in a 378px column, as designed; a longer text would be cut with an ellipsis. */}
           <p className="line-clamp-2 h-9 w-[378px] text-[13px] leading-[18px] text-white">{company.description}</p>
         </div>
 

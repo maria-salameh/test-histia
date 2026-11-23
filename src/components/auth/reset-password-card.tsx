@@ -13,9 +13,11 @@ import { FormAlert } from "@/components/ui/form-alert";
 import { PasswordInput } from "@/components/ui/password-input";
 import { authApi } from "@/lib/auth-api";
 import { AuthError } from "@/lib/auth-errors";
+import { clearResetRequest } from "@/lib/flow-storage";
 import { type ResetPasswordValues, resetPasswordSchema, type ValidationKey } from "@/lib/schemas";
 import { useAuthErrorText, useRetryWindow } from "@/lib/use-auth-error";
 
+// Classes shared by the two "go on" buttons that are links (a Button rendered as an <a> through asChild).
 const PRIMARY_LINK = "h-[3.125rem] w-full max-w-[30rem] hover:bg-primary-300";
 
 type Outcome = "done" | "invalid" | null;
@@ -23,6 +25,9 @@ type Outcome = "done" | "invalid" | null;
 /**
  * Where the reset link lands: `?token=…` for a good link, `?error=INVALID_TOKEN` when the server already
  * knows it is expired or used. A link that stops being valid while the form is open ends in the same message.
+ *
+ * Three views: the form, "password updated", and "link invalid or expired". `useSearchParams` reads the URL on the
+ * client, so the page wraps this component in <Suspense> (required with Cache Components).
  */
 export function ResetPasswordCard() {
   const params = useSearchParams();
@@ -54,9 +59,14 @@ function ResetForm({ token, onDone, onInvalid }: { token: string; onDone: () => 
 
   const reset = useMutation({
     mutationFn: ({ password }: ResetPasswordValues) => authApi.resetPassword(password, token),
-    onSuccess: onDone,
+    onSuccess: () => {
+      // The reset is over: forget the pending "link sent" request so the address does not linger in storage.
+      clearResetRequest();
+      onDone();
+    },
     onError: (error) => {
       if (!(error instanceof AuthError)) return;
+      // The link was valid when the page opened but not any more (used in another tab, expired meanwhile).
       if (error.key === "invalidToken") onInvalid();
       if (error.key === "tooManyRequests" && error.retryAfter) retry.start(error.retryAfter);
     },
@@ -100,6 +110,7 @@ function ResetForm({ token, onDone, onInvalid }: { token: string; onDone: () => 
             size="lg"
             alignment="center"
             textSize="base"
+            // This form is replaced by the success view as soon as it succeeds, so isSuccess cannot linger.
             isLoading={reset.isPending || reset.isSuccess}
             disabled={retry.seconds > 0}
             className="mt-8 h-[3.125rem] w-full hover:bg-primary-300"
@@ -116,6 +127,7 @@ function ResetForm({ token, onDone, onInvalid }: { token: string; onDone: () => 
   );
 }
 
+/** "Password updated": the reset does not sign anyone in, so the next step is the login. */
 function SuccessView() {
   const content = useIntlayer("reset-password");
   const { locale } = useLocale();
@@ -137,6 +149,7 @@ function SuccessView() {
   );
 }
 
+/** Expired, already used or missing link: say so, and offer to ask for a new one. */
 function InvalidLinkView() {
   const content = useIntlayer("reset-password");
   const common = useIntlayer("common");

@@ -9,6 +9,7 @@ export const generateMetadata = async ({ params }: LocalPromiseParams): Promise<
   return { title: getIntlayer("forgot-password", locale).metaTitle };
 };
 
+// Server shell + the client form. The routes are free (the brief says so): /forgot-password, then /forgot-password/sent.
 export default function ForgotPasswordPage() {
   return (
     <AuthShell>

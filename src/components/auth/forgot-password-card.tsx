@@ -23,7 +23,10 @@ import { type ForgotPasswordValues, forgotPasswordSchema, type ValidationKey } f
 import { useAuthErrorText } from "@/lib/use-auth-error";
 import { useCountdown } from "@/lib/use-countdown";
 
-/** Asks for a reset link. The server answers the same way whether the account exists or not. */
+/**
+ * Asks for a reset link. The server answers the same way whether the account exists or not (so the screen cannot
+ * be used to find out who has an account). On success it remembers the request and moves on to /forgot-password/sent.
+ */
 export function ForgotPasswordCard() {
   const { locale } = useLocale();
   const router = useRouter();
@@ -44,14 +47,16 @@ export function ForgotPasswordCard() {
   const key = form.formState.errors.email?.message;
 
   const requestLink = useMutation({
+    // redirectTo carries the language: the link lands on /fr/reset-password or /en/reset-password.
     mutationFn: ({ email }: ForgotPasswordValues) => authApi.requestPasswordReset(email, `/${locale}/reset-password`),
     onSuccess: (_result, { email }) => {
-      saveResetRequest(email);
+      saveResetRequest(email); // so the "sent" screen can come back after a reload, and resend
       startCooldown("reset");
       form.reset(); // Next keeps this page alive in the background: don't leave the address in the field
       startNavigation(() => router.push(`/${locale}/forgot-password/sent`));
     },
     onError: (error) => {
+      // A link left less than 30 s ago: the button waits out the delay the server announced.
       if (error instanceof AuthError && error.key === "tooManyRequests") startCooldown("reset", error.retryAfter);
     },
   });
@@ -94,6 +99,7 @@ export function ForgotPasswordCard() {
             className="mt-8 h-[3.125rem] w-full hover:bg-primary-300"
           >
             {content.submit}
+            {/* "Envoyer le lien (12s)" while the server would refuse another request */}
             {cooldown > 0 && ` (${cooldown}s)`}
           </Button>
         </form>
