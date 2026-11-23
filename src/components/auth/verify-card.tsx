@@ -50,6 +50,9 @@ export function VerifyCard() {
   const finished = useRef(false);
 
   useEffect(() => {
+    // `undefined` means "storage not read yet" (server render, hydration, hence every hard refresh): decide
+    // nothing. Treating it like `null` sent a refreshed page back to the login before storage was even read.
+    if (attempt === undefined) return;
     // `finished` only covers the moment between a successful check and leaving the page; Next keeps this page
     // alive afterwards, so a later visit must start from scratch.
     if (attempt) finished.current = false;
