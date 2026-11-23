@@ -6,7 +6,8 @@ import { FleetOverlay } from "@/components/company/fleet-overlay";
 
 /**
  * Everything around an auth card: the glowing background, the faded company cards, the logo.
- * The card is centred a little below the middle of the screen, as in the design, while the logo keeps one spot.
+ * The card is centred a little below the middle of the screen, as in the design, while the logo keeps one spot
+ * (and a card too tall for that stops under the logo instead of covering it).
  */
 export async function AuthShell({ children }: { children: ReactNode }) {
   // The locale comes from the URL segment, so this stays part of the static shell (no request data needed).
@@ -28,9 +29,9 @@ export async function AuthShell({ children }: { children: ReactNode }) {
         fetchPriority="high"
         className="auth-logo z-10"
       />
-      {/* Padding top = 12vh + the 2rem kept at the bottom: the card's centre lands at 56% of the height, as designed. */}
-      <main className="relative z-10 flex flex-1 items-center justify-center px-4 pt-[calc(12vh+2rem)] pb-8">
-        {children}
+      {/* The padding keeps the card below the logo; `auth-card-slot` puts its centre at 56% of the height (globals.css). */}
+      <main className="relative z-10 flex flex-1 items-center justify-center px-4 pt-(--auth-card-top) pb-(--auth-card-gap)">
+        <div className="auth-card-slot flex w-full justify-center">{children}</div>
       </main>
     </div>
   );

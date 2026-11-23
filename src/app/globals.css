@@ -157,6 +157,15 @@
  * over the base colour. Drawn in CSS rather than as an image so it stays sharp and fills any screen.
  */
 @utility auth-backdrop {
+  /*
+   * Where the logo sits and how big it is. Shared with `auth-logo` (which draws it) and `auth-card-slot` (which keeps
+   * the card clear of it). --auth-card-top is the logo's bottom edge: the image is 169x167, hence 0.99.
+   */
+  --auth-logo-size: clamp(6rem, calc(8.75rem + (100vh - 900px) * 0.161), 10.5625rem);
+  --auth-logo-top: clamp(1rem, calc(3.125rem + (100vh - 900px) * 0.228), 5.6875rem);
+  --auth-card-top: calc(var(--auth-logo-top) + var(--auth-logo-size) * 0.99);
+  --auth-card-gap: 0.5rem;
+
   background-color: var(--app-background);
   background-image:
     radial-gradient(
@@ -179,15 +188,31 @@
 
 /*
  * The logo stays at one spot while the card moves with its height. Its size and distance from the top follow the
- * viewport height: 169px and 91px at 1080 (the design), 140px and 50px at 900, so on 1400x900 it never touches the card.
+ * viewport height: 169px and 91px at 1080 (the design), 140px and 50px at 900. The values live on `auth-backdrop`.
  */
 @utility auth-logo {
   position: absolute;
   left: 50%;
   translate: -50% 0;
   height: auto;
-  width: clamp(6rem, calc(8.75rem + (100vh - 900px) * 0.161), 10.5625rem);
-  top: clamp(1rem, calc(3.125rem + (100vh - 900px) * 0.228), 5.6875rem);
+  width: var(--auth-logo-size);
+  top: var(--auth-logo-top);
+}
+
+/*
+ * Vertical position of the card: centred at 56% of the screen height, as designed, but never higher than the logo's
+ * bottom edge. A tall card (the sign-up form with three errors on 1400x900) would otherwise slide under the logo.
+ *
+ * The <main> that holds the slot is padded by --auth-card-top above and --auth-card-gap below, so a card taller than
+ * the room left simply lengthens the page. Centring inside that padded box puts a card --auth-lift lower than 56%,
+ * so the slot moves it back up by that much (`translate` percentages are the card's own size: 50% = half its height).
+ * `max` stops it from rising past the logo, and `min(0px, ...)` stops it from moving at all once it overflows.
+ */
+@utility auth-card-slot {
+  --auth-room: calc(100dvh - var(--auth-card-top) - var(--auth-card-gap));
+  --auth-lift: calc((var(--auth-card-top) - var(--auth-card-gap)) / 2 - 6dvh);
+
+  translate: 0 min(0px, max(calc(var(--auth-lift) * -1), calc(50% - var(--auth-room) / 2)));
 }
 
 /* Company cards fade in once loaded (they rest at 30% opacity, as designed). */
